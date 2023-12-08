@@ -9,7 +9,7 @@ from sahi.utils.yolov8 import download_yolov8s_model
 from ultralytics.utils.files import increment_path
 
 
-def run(weights='yolov8n.pt', source='test.mp4', view_img=False, save_img=False, exist_ok=False):
+def run(weights='best.pt', source='qyj0001_1700460294295.mp4', view_img=True, save_img=True, exist_ok=False):
     """
     Run object detection on a video using YOLOv8 and SAHI.
 
@@ -25,7 +25,7 @@ def run(weights='yolov8n.pt', source='test.mp4', view_img=False, save_img=False,
     if not Path(source).exists():
         raise FileNotFoundError(f"Source path '{source}' does not exist.")
 
-    yolov8_model_path = f'models/{weights}'
+    yolov8_model_path = f'moterial/{weights}'
     download_yolov8s_model(yolov8_model_path)
     detection_model = AutoDetectionModel.from_pretrained(model_type='yolov8',
                                                          model_path=yolov8_model_path,
