@@ -186,6 +186,7 @@ class C2(nn.Module):
 
 class C2f(nn.Module):
     """Faster Implementation of CSP Bottleneck with 2 convolutions."""
+    export = False
 
     def __init__(self, c1, c2, n=1, shortcut=False, g=1, e=0.5):
         """Initialize CSP bottleneck layer with two convolutions with arguments ch_in, ch_out, number, shortcut, groups,
@@ -199,16 +200,20 @@ class C2f(nn.Module):
 
     def forward(self, x):
         """Forward pass through C2f layer."""
-        y = list(self.cv1(x).chunk(2, 1))
-        y.extend(m(y[-1]) for m in self.m)
-        return self.cv2(torch.cat(y, 1))
+        # y = list(self.cv1(x).chunk(2, 1))
+        # y.extend(m(y[-1]) for m in self.m)
+        # return self.cv2(torch.cat(y, 1))
+        x = self.cv1(x)
+        x = [x, x[:, self.c:, ...]]
+        x.extend(m(x[-1]) for m in self.m)
+        x.pop(1)
+        return self.cv2(torch.cat(x, 1))
 
     def forward_split(self, x):
         """Forward pass using split() instead of chunk()."""
         y = list(self.cv1(x).split((self.c, self.c), 1))
         y.extend(m(y[-1]) for m in self.m)
         return self.cv2(torch.cat(y, 1))
-
 
 class C3(nn.Module):
     """CSP Bottleneck with 3 convolutions."""

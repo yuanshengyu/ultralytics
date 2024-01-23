@@ -200,6 +200,8 @@ class ConfusionMatrix:
         self.nc = nc  # number of classes
         self.conf = 0.25 if conf in (None, 0.001) else conf  # apply 0.25 if default val conf is passed
         self.iou_thres = iou_thres
+        self.wu = 0
+        self.total = 0
 
     def process_cls_preds(self, preds, targets):
         """
@@ -265,6 +267,9 @@ class ConfusionMatrix:
             for i, dc in enumerate(detection_classes):
                 if not any(m1 == i):
                     self.matrix[dc, self.nc] += 1  # predicted background
+                    
+        self.total = sum(sum(self.matrix))
+        self.wu = sum(self.matrix[:, -1])
 
     def matrix(self):
         """Returns the confusion matrix."""

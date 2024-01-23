@@ -2,13 +2,14 @@ import cv2
 from ultralytics import YOLO
 
 # 加载模型
-model = YOLO('material/best.pt')
-rotate = True
+model = YOLO('material/bestn.pt')
+rotate = False
 # 打开视频文件
 # video_path = "material/VID_20231120_140850.mp4"
 # video_name = "qyj0001_1700460294295"
 # video_name = "qyj0001_1700461636531"
-video_name = "qyj260100001_1700101544566"
+video_name = "qyj260100001_1700460790508"
+# video_name = "qyj260100001_1700101544566"
 video_path = f"material/{video_name}.mp4"
 save_video_path = f'material/{video_name}_detect.mp4'
 cap = cv2.VideoCapture(video_path)
