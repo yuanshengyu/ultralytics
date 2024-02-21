@@ -5,11 +5,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .conv import Conv, DWConv, GhostConv, LightConv, RepConv
+from .conv import Conv, DWConv, GhostConv, LightConv, RepConv, PartialConv3, PartialConv, EMA, SimAM
 from .transformer import TransformerBlock
 
 __all__ = ('DFL', 'HGBlock', 'HGStem', 'SPP', 'SPPF', 'C1', 'C2', 'C3', 'C2f', 'C3x', 'C3TR', 'C3Ghost',
-           'GhostBottleneck', 'Bottleneck', 'BottleneckCSP', 'Proto', 'RepC3', 'ResNetLayer', 'CARAFE')
+           'GhostBottleneck', 'Bottleneck', 'BottleneckCSP', 'Proto', 'RepC3', 'ResNetLayer', 'CARAFE', 'FC2fEMA')
 
 
 class DFL(nn.Module):
@@ -189,7 +189,27 @@ class SPPF(nn.Module):
         y2 = self.m(y1)
         return self.cv2(torch.cat((x, y1, y2, self.m(y2)), 1))
 
-
+class SMSPPCSPC(nn.Module):
+    def __init__(self, c1, k=(5, 7, 9)):
+        super().__init__()
+        c_ = c1 // 2  # hidden channels
+        self.cv1 = Conv(c1, c_, 1, 1)
+        self.cv2 = Conv(c_, c1, 3)
+        self.cv3 = Conv(c1, c1, 1, 1)
+        self.simam1 = SimAM()
+        self.pconv = PartialConv(c1)
+        self.cv4 = Conv(c1, c1, 3)
+        self.simam2 = SimAM()
+        self.cv5 = Conv(c1, c1)
+        self.m = nn.ModuleList([nn.MaxPool2d(kernel_size=x, stride=1, padding=x // 2) for x in k])
+        
+    def forward(self, x):
+        x1 = self.simam1(self.cv2(self.cv1(x)))
+        x2 = self.cv2(torch.cat([x, torch.cat([m(x1) for m in self.m], 1)], 1))
+        x = self.cv3(x)
+        x = torch.cat([x, self.cv4(self.pconv(x2))], 1)
+        return self.cv5(self.simam2(x))
+        
 class C1(nn.Module):
     """CSP Bottleneck with 1 convolution."""
 
@@ -250,6 +270,30 @@ class C2f(nn.Module):
         y.extend(m(y[-1]) for m in self.m)
         return self.cv2(torch.cat(y, 1))
 
+class FC2fEMA(nn.Module):
+    """Faster Implementation of CSP Bottleneck with 2 convolutions."""
+
+    def __init__(self, c1, c2, n=1, e=0.5):
+        """Initialize CSP bottleneck layer with two convolutions with arguments ch_in, ch_out, number, shortcut, groups,
+        expansion.
+        """
+        super().__init__()
+        self.c = int(c2 * e)  # hidden channels
+        self.cv1 = Conv(c1, 2 * self.c, 1, 1)
+        self.cv2 = Conv((2 + n) * self.c, c2, 1)  # optional act=FReLU(c2)
+        self.m = nn.ModuleList(FasterEMABlock(self.c) for _ in range(n))
+
+    def forward(self, x):
+        """Forward pass through C2f layer."""
+        y = list(self.cv1(x).chunk(2, 1))
+        y.extend(m(y[-1]) for m in self.m)
+        return self.cv2(torch.cat(y, 1))
+
+    def forward_split(self, x):
+        """Forward pass using split() instead of chunk()."""
+        y = list(self.cv1(x).split((self.c, self.c), 1))
+        y.extend(m(y[-1]) for m in self.m)
+        return self.cv2(torch.cat(y, 1))
 
 class C3(nn.Module):
     """CSP Bottleneck with 3 convolutions."""
@@ -410,3 +454,19 @@ class ResNetLayer(nn.Module):
     def forward(self, x):
         """Forward pass through the ResNet layer."""
         return self.layer(x)
+    
+    
+class FasterEMABlock(nn.Module):
+    
+    def __init__(self, c1):
+        super().__init__()
+        self.pconv = PartialConv3(c1, 4)
+        c2 = c1 * 2
+        self.cbs = Conv(c1, c2, k=1, s=1, act=True)
+        self.cv1 = Conv(c2, c1, k=1, act=False)
+        self.ema = EMA(c1)
+        
+    def forward(self, x):
+        return x + self.ema(self.cv1(self.cbs(self.pconv(x))))
+    
+    
